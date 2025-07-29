@@ -16,7 +16,14 @@ const STRAPI_API_URL = process.env.STRAPI_API_URL
 const STRAPI_TOKEN = process.env.STRAPI_TOKEN
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY
 
-app.use(cors())
+const corsOptions = {
+	origin: ['https://nice-advice.info', 'https://www.nice-advice.info'],
+	credentials: true,
+	methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+}
+
+app.use(cors(corsOptions))
+app.options('*', cors(corsOptions))
 app.use(express.json())
 
 function genId() {
@@ -230,30 +237,30 @@ app.post('/api/generate-article', async (req, res) => {
 						{
 							role: 'system',
 							content: ` You are a CMS content generator. Return ONLY a valid raw JSON object — no markdown, no explanations, no comments. Create an article in JSON format based on the topic: "${query}". The article must include exactly 2 paragraphs in the "paragraphs" array. JSON must always have property 'paragraphs' which is an array of EXACTLY 2 objects, no more, no less. Never reply with fewer or more than 2 items in the paragraphs array. The article should match this structure:
-{
-  "title": "...",
-  "description": ["... (min 700 characters)"],
-  "isPopular": false,
-  "paragraphs": [
-    {
-      "subtitle": "...",
-      "description": ["... (min 700 characters)"],
-      "ads": [
-        { "title": "...", "url": "https://..." },
-        { "title": "...", "url": "https://..." }
-      ],
-      "image_prompt": "prompt for image generation"
-    }
-  ],
-  "ads": [
-    { "title": "...", "url": "https://..." },
-    { "title": "...", "url": "https://..." },
-    { "title": "...", "url": "https://..." }
-  ],
-  "image_prompt": "main image prompt",
-  "firstAdBanner": { "url": "https://...", "image_prompt": "..." },
-  "secondAdBanner": { "url": "https://...", "image_prompt": "..." }
-}`,
+							{
+								"title": "...",
+								"description": ["... (min 700 characters)"],
+								"isPopular": false,
+								"paragraphs": [
+									{
+										"subtitle": "...",
+										"description": ["... (min 700 characters)"],
+										"ads": [
+											{ "title": "...", "url": "https://..." },
+											{ "title": "...", "url": "https://..." }
+										],
+										"image_prompt": "prompt for image generation"
+									}
+								],
+								"ads": [
+									{ "title": "...", "url": "https://..." },
+									{ "title": "...", "url": "https://..." },
+									{ "title": "...", "url": "https://..." }
+								],
+								"image_prompt": "main image prompt",
+								"firstAdBanner": { "url": "https://...", "image_prompt": "..." },
+								"secondAdBanner": { "url": "https://...", "image_prompt": "..." }
+							}`,
 						},
 						{ role: 'user', content: query },
 					],
