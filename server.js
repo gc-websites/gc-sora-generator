@@ -16,23 +16,17 @@ const STRAPI_API_URL = process.env.STRAPI_API_URL
 const STRAPI_TOKEN = process.env.STRAPI_TOKEN
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY
 
-const corsOptions = {
-	origin: (origin, callback) => {
-		const allowedOrigins = [
-			'https://nice-advice.info',
-			'https://www.nice-advice.info',
-		]
-		if (!origin || allowedOrigins.includes(origin)) {
-			callback(null, true)
-		} else {
-			callback(new Error('Not allowed by CORS'))
-		}
-	},
-	credentials: true,
-	methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-}
+// const corsOptions = {
+// 	origin: [
+// 		'https://nice-advice.info',
+// 		'https://www.nice-advice.info',
+// 		'http://localhost:5173/generation',
+// 	],
+// 	credentials: true,
+// 	methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+// }
 
-app.use(cors(corsOptions))
+app.use(cors())
 app.use(express.json())
 
 function genId() {
