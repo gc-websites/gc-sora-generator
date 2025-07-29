@@ -235,7 +235,7 @@ app.post('/api/generate-article', async (req, res) => {
 					messages: [
 						{
 							role: 'system',
-							content: ` You are a CMS content generator. Return ONLY a valid raw JSON object — no markdown, no explanations, no comments. Create an article in JSON format based on the topic: "${query}". The article must include exactly 2 paragraphs in the "paragraphs" array. JSON must always have property 'paragraphs' which is an array of EXACTLY 2 objects, no more, no less. Never reply with fewer or more than 2 items in the paragraphs array. The article should match this structure:
+							content: ` You are a CMS content generator. Return ONLY a valid raw JSON object — no markdown, no explanations,no backticks, no comments. Your output MUST start and end with { and }. Create an article in JSON format based on the topic: "${query}". The article must include exactly 2 paragraphs in the "paragraphs" array. JSON must always have property 'paragraphs' which is an array of EXACTLY 2 objects, no more, no less. Never reply with fewer or more than 2 items in the paragraphs array. The article should match this structure:
 							{
 								"title": "...",
 								"description": ["... (min 700 characters)"],
@@ -268,7 +268,12 @@ app.post('/api/generate-article', async (req, res) => {
 		)
 
 		const data = await openaiRes.json()
-		const raw = data.choices?.[0]?.message?.content
+		let raw = data.choices?.[0]?.message?.content ?? ''
+
+		raw = raw
+			.trim()
+			.replace(/^```json\n?/, '')
+			.replace(/```$/, '')
 
 		try {
 			const article = JSON.parse(raw)
