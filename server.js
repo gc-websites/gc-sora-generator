@@ -299,6 +299,10 @@ app.post('/api/create-post', async (req, res) => {
 	}
 })
 
+app.get('/', (req, res) => {
+	res.json({ status: 'ok', message: 'Server is running' })
+})
+
 app.listen(PORT, () => {
 	console.log(`🚀 Server started on http://localhost:${PORT}`)
 })
