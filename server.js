@@ -17,7 +17,13 @@ const STRAPI_TOKEN = process.env.STRAPI_TOKEN
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY
 
 const corsOptions = {
-	origin: ['https://nice-advice.info', 'https://www.nice-advice.info'],
+	origin: [
+		'https://nice-advice.info',
+		'https://www.nice-advice.info',
+		'https://openai.com',
+		'https://sora.chatgpt.com',
+		'https://chatgpt.com',
+	],
 	credentials: true,
 	methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 }
@@ -45,12 +51,24 @@ async function isTextareaEmpty(page) {
 	)
 }
 
-async function waitForTaskIdByHash(page, hash_id, timeout = 60000) {
+async function waitForTaskIdByHash(
+	page,
+	hash_id,
+	timeout = 60000,
+	initialDelayMs = 2500
+) {
 	const start = Date.now()
+
+	if (initialDelayMs > 0) {
+		await wait(initialDelayMs)
+	}
+
 	while (Date.now() - start < timeout) {
 		await page.goto('https://sora.chatgpt.com/library', {
 			waitUntil: 'networkidle2',
 		})
+
+		await wait(500)
 
 		const task_id = await page.$$eval(
 			'div.flex.flex-col.gap-1',
@@ -63,7 +81,7 @@ async function waitForTaskIdByHash(page, hash_id, timeout = 60000) {
 						const a = card.querySelector('a[href^="/t/task_"]')
 						if (a) {
 							const href = a.getAttribute('href')
-							const match = href.match(/^\/t\/(task_[a-zA-Z0-9]+)/)
+							const match = href.match(/^\/t\/(task_[A-Za-z0-9_-]+)/)
 							return match ? match[1] : null
 						}
 					}
@@ -194,7 +212,9 @@ async function generateSoraImageFull(prompt) {
 	if (!promptAccepted)
 		throw new Error('❌ Prompt не прийнятий — Sora вже зайнятий')
 
-	const task_id = await waitForTaskIdByHash(page, hash_id)
+	await wait(2500)
+
+	const task_id = await waitForTaskIdByHash(page, hash_id, 60000, 2500)
 
 	const documentId = await createSoraTaskInStrapi({ prompt, hash_id, task_id })
 
@@ -235,31 +255,31 @@ app.post('/api/generate-article', async (req, res) => {
 					messages: [
 						{
 							role: 'system',
-							content: ` You are a CMS content generator. Return ONLY a valid raw JSON object — no markdown, no explanations,no backticks, no comments. Your output MUST start and end with { and }. Create an article in JSON format based on the topic: "${query}". The article must include exactly 2 paragraphs in the "paragraphs" array. JSON must always have property 'paragraphs' which is an array of EXACTLY 2 objects, no more, no less. Never reply with fewer or more than 2 items in the paragraphs array. The article should match this structure:
-							{
-								"title": "...",
-								"description": ["... (min 700 characters)"],
-								"isPopular": false,
-								"paragraphs": [
-									{
-										"subtitle": "...",
-										"description": ["... (min 700 characters)"],
-										"ads": [
-											{ "title": "...", "url": "https://..." },
-											{ "title": "...", "url": "https://..." }
-										],
-										"image_prompt": "prompt for image generation"
-									}
-								],
-								"ads": [
-									{ "title": "...", "url": "https://..." },
-									{ "title": "...", "url": "https://..." },
-									{ "title": "...", "url": "https://..." }
-								],
-								"image_prompt": "main image prompt",
-								"firstAdBanner": { "url": "https://...", "image_prompt": "..." },
-								"secondAdBanner": { "url": "https://...", "image_prompt": "..." }
-							}`,
+							content: ` You are a CMS content generator. Return ONLY a valid raw JSON object — no markdown, no explanations, no backticks, no comments. Your output MUST start and end with { and }. Create an article in JSON format based on the topic: "${query}". The article must include exactly 2 paragraphs in the "paragraphs" array. JSON must always have property 'paragraphs' which is an array of EXACTLY 2 objects, no more, no less. Never reply with fewer or more than 2 items in the paragraphs array. The article should match this structure:
+              {
+                "title": "...",
+                "description": ["... (min 700 characters)"],
+                "isPopular": false,
+                "paragraphs": [
+                  {
+                    "subtitle": "...",
+                    "description": ["... (min 700 characters)"],
+                    "ads": [
+                      { "title": "...", "url": "https://..." },
+                      { "title": "...", "url": "https://..." }
+                    ],
+                    "image_prompt": "prompt for image generation"
+                  }
+                ],
+                "ads": [
+                  { "title": "...", "url": "https://..." },
+                  { "title": "...", "url": "https://..." },
+                  { "title": "...", "url": "https://..." }
+                ],
+                "image_prompt": "main image prompt",
+                "firstAdBanner": { "url": "https://...", "image_prompt": "..." },
+                "secondAdBanner": { "url": "https://...", "image_prompt": "..." }
+              }`,
 						},
 						{ role: 'user', content: query },
 					],
