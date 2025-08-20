@@ -159,16 +159,90 @@ async function uploadImageToStrapi(imageUrl) {
 	return data[0]?.id
 }
 
+// async function generateSoraImageFull(prompt) {
+// 	const browser = await puppeteer.launch({
+// 		headless: true,
+// 		args: ['--no-sandbox', '--disable-setuid-sandbox'],
+// 		defaultViewport: { width: 1280, height: 800 },
+// 	})
+// 	const page = await browser.newPage()
+// 	await loadCookies(page)
+// 	await page.goto('https://sora.chatgpt.com/explore/images', {
+// 		waitUntil: 'networkidle2',
+// 	})
+
+// 	const hash_id = genId()
+// 	const fullPrompt = `${prompt}, ultra realistic, photorealistic, high resolution, professional photography, shot on Canon EOS, natural lighting, sharp focus, 8k, depth of field #${hash_id}`
+
+// 	const maxWait = 300000
+// 	const startWait = Date.now()
+// 	while (true) {
+// 		try {
+// 			const empty = await isTextareaEmpty(page)
+// 			if (empty) break
+// 		} catch (e) {}
+// 		if (Date.now() - startWait > maxWait)
+// 			throw new Error('❌ Таймаут: textarea не очистилась')
+// 		await wait(20000)
+// 	}
+
+// 	await page.focus('textarea[placeholder="Describe your image..."]')
+// 	await page.type('textarea[placeholder="Describe your image..."]', fullPrompt)
+
+// 	const buttons = await page.$$('button span.sr-only')
+// 	let clicked = false
+// 	for (const span of buttons) {
+// 		const text = await page.evaluate(el => el.textContent.trim(), span)
+// 		if (text === 'Create image') {
+// 			await span.evaluate(el => el.closest('button').click())
+// 			clicked = true
+// 			break
+// 		}
+// 	}
+// 	if (!clicked) throw new Error('❌ Кнопку Create image не знайдено')
+
+// 	let promptAccepted = false
+// 	for (let i = 0; i < 10; ++i) {
+// 		await wait(2000)
+// 		if (await isTextareaEmpty(page)) {
+// 			promptAccepted = true
+// 			break
+// 		}
+// 	}
+// 	if (!promptAccepted)
+// 		throw new Error('❌ Prompt не прийнятий — Sora вже зайнятий')
+
+// 	await wait(2500)
+
+// 	const task_id = await waitForTaskIdByHash(page, hash_id, 60000, 2500)
+
+// 	const documentId = await createSoraTaskInStrapi({ prompt, hash_id, task_id })
+
+// 	const images = await waitFor4Images(page, task_id)
+// 	const imageId = await uploadImageToStrapi(images[0])
+
+// 	await updateSoraTaskStatus(documentId, true)
+
+// 	await browser.close()
+// 	return { imageId, imageUrl: images[0], hash_id, task_id, documentId }
+// }
+
 async function generateSoraImageFull(prompt) {
 	const browser = await puppeteer.launch({
 		headless: true,
 		args: ['--no-sandbox', '--disable-setuid-sandbox'],
 		defaultViewport: { width: 1280, height: 800 },
 	})
+
 	const page = await browser.newPage()
 	await loadCookies(page)
+
 	await page.goto('https://sora.chatgpt.com/explore/images', {
 		waitUntil: 'networkidle2',
+	})
+
+	await page.waitForSelector('textarea[placeholder="Describe your image..."]', {
+		visible: true,
 	})
 
 	const hash_id = genId()
@@ -180,26 +254,57 @@ async function generateSoraImageFull(prompt) {
 		try {
 			const empty = await isTextareaEmpty(page)
 			if (empty) break
-		} catch (e) {}
-		if (Date.now() - startWait > maxWait)
+		} catch (e) {
+			/* ignore transient errors */
+		}
+		if (Date.now() - startWait > maxWait) {
+			await browser.close()
 			throw new Error('❌ Таймаут: textarea не очистилась')
+		}
 		await wait(20000)
 	}
 
 	await page.focus('textarea[placeholder="Describe your image..."]')
 	await page.type('textarea[placeholder="Describe your image..."]', fullPrompt)
 
-	const buttons = await page.$$('button span.sr-only')
-	let clicked = false
-	for (const span of buttons) {
-		const text = await page.evaluate(el => el.textContent.trim(), span)
-		if (text === 'Create image') {
-			await span.evaluate(el => el.closest('button').click())
-			clicked = true
-			break
+	await wait(250)
+
+	await page.waitForFunction(
+		() => {
+			const spans = Array.from(document.querySelectorAll('button span.sr-only'))
+			return spans.some(span => {
+				if ((span.textContent || '').trim() !== 'Create image') return false
+				const btn = span.closest('button')
+				if (!btn) return false
+				const visible = !!btn.offsetParent
+				return visible && !btn.disabled
+			})
+		},
+		{ timeout: 15000 }
+	)
+
+	const btnHandle = await page.evaluateHandle(() => {
+		const spans = Array.from(document.querySelectorAll('button span.sr-only'))
+		for (const span of spans) {
+			if ((span.textContent || '').trim() !== 'Create image') continue
+			const btn = span.closest('button')
+			if (!btn) continue
+			const visible = !!btn.offsetParent
+			if (visible && !btn.disabled) return btn
 		}
+		return null
+	})
+
+	const btnEl = btnHandle && btnHandle.asElement ? btnHandle.asElement() : null
+	if (!btnEl) {
+		await browser.close()
+		throw new Error('❌ Кнопку Create image не знайдено або вона disabled')
 	}
-	if (!clicked) throw new Error('❌ Кнопку Create image не знайдено')
+
+	await page.evaluate(btn => {
+		btn.scrollIntoView({ block: 'center', inline: 'center' })
+		btn.click()
+	}, btnEl)
 
 	let promptAccepted = false
 	for (let i = 0; i < 10; ++i) {
@@ -208,16 +313,21 @@ async function generateSoraImageFull(prompt) {
 			promptAccepted = true
 			break
 		}
+		if (i === 4) {
+			try {
+				await page.keyboard.press('Enter')
+			} catch (e) {}
+		}
 	}
-	if (!promptAccepted)
+	if (!promptAccepted) {
+		await browser.close()
 		throw new Error('❌ Prompt не прийнятий — Sora вже зайнятий')
+	}
 
 	await wait(2500)
 
 	const task_id = await waitForTaskIdByHash(page, hash_id, 60000, 2500)
-
 	const documentId = await createSoraTaskInStrapi({ prompt, hash_id, task_id })
-
 	const images = await waitFor4Images(page, task_id)
 	const imageId = await uploadImageToStrapi(images[0])
 
